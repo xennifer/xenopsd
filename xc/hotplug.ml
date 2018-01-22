@@ -135,13 +135,20 @@ let wait_for_plug (task: Xenops_task.task_handle) ~xs (x: device) =
 let wait_for_unplug (task: Xenops_task.task_handle) ~xs (x: device) =
   debug "Hotplug.wait_for_unplug: %s" (string_of_device x);
   try
-    Stats.time_this "udev backend remove event" 
-      (fun () ->
-         let path = path_written_by_hotplug_scripts x in
-         let (_: bool) = cancellable_watch (Device x) [ Watch.map (fun _ -> ()) (Watch.key_to_disappear path) ] [] task ~xs ~timeout:!Xenopsd.hotplug_timeout () in
-         ()
-      );
-    debug "Synchronised ok with hotplug script: %s" (string_of_device x)
+    let path = path_written_by_hotplug_scripts x in
+    let qdisk = Astring.String.is_infix ~affix:"backend/qdisk/" path in
+    debug "XXXX wait_for_unplug qdisk %s %b" path qdisk;
+    if not qdisk then begin
+      Stats.time_this "udev backend remove event" 
+        (fun () ->
+           let (_: bool) = cancellable_watch (Device x) [ Watch.map (fun _ -> ()) (Watch.key_to_disappear path) ] [] task ~xs ~timeout:!Xenopsd.hotplug_timeout () in
+           ()
+        );
+      debug "Synchronised ok with hotplug script: %s" (string_of_device x)
+    end else begin
+      xs.Xs.rm path
+    end;
+    debug "XXXX wait_for_unplug finished waiting";
   with Watch.Timeout _ ->
     raise (Device_timeout x)
 

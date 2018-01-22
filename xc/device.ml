@@ -191,7 +191,17 @@ module Generic = struct
         )
       )
 
-  let unplug_watch ~xs (x: device) = Hotplug.path_written_by_hotplug_scripts x |> Watch.key_to_disappear
+  let unplug_watch ~xs (x: device) =
+    let path = Hotplug.path_written_by_hotplug_scripts x in
+    let qdisk = Astring.String.is_infix ~affix:"backend/qdisk/" path in
+    debug "XXXX unplug_watch qdisk %s %b" path qdisk;
+    if not qdisk then begin
+      Watch.key_to_disappear path
+    end else begin
+      let open Watch in
+      { evaluate = fun xs -> try xs.Xs.rm path with _ -> debug "XXXX unplug_watch %s already removed" path }
+    end
+
   let error_watch ~xs (x: device) = Watch.value_to_appear (error_path_of_device ~xs x)
   let frontend_closed ~xs (x: device) = Watch.map (fun () -> "") (Watch.value_to_become (frontend_rw_path_of_device ~xs x ^ "/state") (Xenbus_utils.string_of Xenbus_utils.Closed))
   let backend_closed ~xs (x: device) = Watch.value_to_become (backend_path_of_device ~xs x ^ "/state") (Xenbus_utils.string_of Xenbus_utils.Closed)
