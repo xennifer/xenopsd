@@ -317,6 +317,8 @@ let print_fork_error f =
     end
 
 let start_nbd_client ~unix_socket_path ~export_name =
+  debug "XXXX checking whether %s exists" unix_socket_path;
+  if not (Sys.file_exists unix_socket_path) then failwith ("Unix socket " ^ unix_socket_path ^ " does not exist");
   Forkhelpers.execute_command_get_output "/usr/sbin/modprobe" ["nbd"] |> ignore;
   let is_used ~nbd_device =
     debug "XXXX checking whether %s is in use" nbd_device;
