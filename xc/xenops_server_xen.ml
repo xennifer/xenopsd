@@ -316,17 +316,25 @@ let print_fork_error f =
         raise e
     end
 
+let assert_file_exists f =
+  debug "XXXX checking whether %s exists" f;
+  if not (Sys.file_exists f) then failwith (f ^ " does not exist")
+
+let run_command cmd args =
+  debug "XXXX running %s %s" cmd (String.concat " " args);
+  let stdout, stderr = print_fork_error (fun () -> Forkhelpers.execute_command_get_output cmd args) in
+  debug "XXXX stdout='%s' stderr='%s'" stdout stderr
+
 let start_nbd_client ~unix_socket_path ~export_name =
-  debug "XXXX checking whether %s exists" unix_socket_path;
-  if not (Sys.file_exists unix_socket_path) then failwith ("Unix socket " ^ unix_socket_path ^ " does not exist");
-  Forkhelpers.execute_command_get_output "/usr/sbin/modprobe" ["nbd"] |> ignore;
+  assert_file_exists unix_socket_path;
+  run_command "/usr/sbin/modprobe" ["nbd"];
   let is_used ~nbd_device =
     debug "XXXX checking whether %s is in use" nbd_device;
     (* First check if the file exists, because "nbd-client -c" returns
        1 for a non-existent file. *)
-    if not (Sys.file_exists nbd_device) then failwith ("NBD device file " ^ nbd_device ^ " does not exist");
+    assert_file_exists nbd_device;
     try
-      print_fork_error (fun () -> Forkhelpers.execute_command_get_output "/usr/sbin/nbd-client" ["-check"; nbd_device]) |> ignore;
+      run_command "/usr/sbin/nbd-client" ["-check"; nbd_device];
       true
     with Forkhelpers.Spawn_internal_error(stderr, stdout, status) as e ->
       begin match status with
@@ -343,9 +351,7 @@ let start_nbd_client ~unix_socket_path ~export_name =
   in
   let run_nbd_client ~nbd_device =
     print_fork_error (fun () ->
-        debug "XXXX '/usr/sbin/nbd-client' '-unix' '%s' '%s' '-name' '%s'" unix_socket_path nbd_device export_name;
-        let stdout, stderr = Forkhelpers.execute_command_get_output "/usr/sbin/nbd-client" ["-unix"; unix_socket_path; nbd_device; "-name"; export_name] in
-        debug "XXXX stdout='%s' stderr='%s'" stdout stderr
+        run_command "/usr/sbin/nbd-client" ["-unix"; unix_socket_path; nbd_device; "-name"; export_name]
       )
   in
   debug "XXXX finding free NBD device";
@@ -356,8 +362,7 @@ let start_nbd_client ~unix_socket_path ~export_name =
   nbd_device
 
 let stop_nbd_client ~nbd_device =
-  debug "XXXX stop_nbd_client %s" nbd_device;
-  print_fork_error (fun () -> Forkhelpers.execute_command_get_output "/usr/sbin/nbd-client" ["-disconnect"; nbd_device]) |> ignore
+  run_command "/usr/sbin/nbd-client" ["-disconnect"; nbd_device]
 
 let with_disk ~xc ~xs task disk write f = match disk with
   | Local path ->
